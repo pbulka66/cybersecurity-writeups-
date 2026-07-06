@@ -412,3 +412,67 @@ IMAP (Internet Message Access Protocol)
 - Перехват трафика: Telnet, HTTP, FTP, SMTP/POP3/IMAP без шифрования — это прямой слив паролей при сниффинге.
 - Захват баннеров: Подключение к любому из этих портов через `nc` или `telnet` раскрывает версию софта.
 - Вектор атак: Взломанная почта — это «золотой ключ». Доступ к переписке, сброс паролей от других сервисов, поиск вложений с паролями.
+
+### Протоколы и серверы 2 (Protocols and Serves 2)
+1. Атаки перехвата (Sniffing) и MITM
+- Где актуально: внутренние сети, устаревшие системы, IoT, неправильно настроенные сервисы, Wi-Fi.
+- Инструменты захвата трафика:
+  - tcpdump (CLI, легковесный): `sudo tcpdump port 110 -A`
+  - Wireshark (GUI, мощный анализ)
+  - Tshark (CLI-версия Wireshark)
+- Полезные фильтры tcpdump: `port`, `host`, `-w capture.pcap`, `-r capture.pcap`
+- MITM: как заставить трафик идти через тебя:
+  - ARP Spoofing (Bettercap, Ettercap)
+  - DNS Spoofing
+  - Поддельные точки доступа
+  - BGP Hijacking (сложный уровень)
+
+2. Атаки на HTTPS (MITM против шифрования)
+- SSL Stripping: понижение HTTPS до HTTP.
+- Поддельные сертификаты (если жертва игнорирует предупреждение).
+- Защита: HSTS (браузер блокирует HTTP), Certificate Transparency (публичные логи), закрепление сертификатов.
+
+3. TLS: апгрейд протоколов
+Неявный TLS (Implicit): шифрование сразу на выделенном порту (443, 993, 995, 465).
+STARTTLS: апгрейд открытого соединения до TLS на том же порту (587, 25, 143). Осторожно: возможен даунгрейд MITM-атакой.
+
+Таблица портов:
+| Протокол | Открытый текст | Зашифрованный (Implicit TLS) |
+|----------|----------------|------------------------------|
+| HTTP     | 80             | 443 (HTTPS)                  |
+| FTP      | 21             | 990 (FTPS)                   |
+| SMTP     | 25             | 465 (SMTPS)                  |
+| POP3     | 110            | 995 (POP3S)                  |
+| IMAP     | 143            | 993 (IMAPS)                  |
+| DNS      | 53             | 853 (DoT), 443 (DoH)         |
+
+4. SSH (Secure Shell) — Порт 22
+- Замена Telnet. Весь трафик шифрован.
+- Полезные опции:
+  - `ssh -p 2222 user@host` (нестандартный порт)
+  - `ssh -i ~/.ssh/key user@host` (ключ)
+  - `ssh -J bastion user@internal` (jump host)
+  - `ssh -L 8080:localhost:80 user@host` (локальный проброс)
+  - `ssh -D 9050 user@host` (SOCKS-прокси)
+  - `ssh user@host "cat /etc/passwd"` (выполнить команду)
+- Передача файлов: SFTP (поверх SSH, основной способ), SCP (устаревает), FTPS (FTP + TLS).
+
+5. Атаки на пароли
+- Виды: Targeted, Dictionary, Brute Force, Credential Stuffing, Password Spraying.
+- Hydra — король атак на сетевые сервисы.
+  - Базовый синтаксис: `hydra -l username -P wordlist.txt server service`
+  - Примеры:
+    - FTP: `hydra -l mark -P rockyou.txt 10.112.138.79 ftp`
+    - SSH: `hydra -l frank -P rockyou.txt 10.112.138.79 ssh`
+    - IMAP: `hydra -l lazie -P rockyou.txt 10.112.138.79 imap`
+  - Полезные флаги: `-L` (список юзеров), `-s` (порт), `-V` (verbose), `-t` (потоки), `-f` (стоп после первого успеха).
+- Другие инструменты: Medusa, Ncrack, CrackMapExec/NetExec (AD), Burp Intruder (веб-формы), Hashcat/John (оффлайн-взлом хешей).
+
+6. Защита от всего этого безобразия
+- Шифрование везде (TLS 1.2/1.3).
+- HSTS для веба.
+- SSH-ключи вместо паролей.
+- MFA (многофакторка).
+- Блокировки аккаунтов и rate limiting.
+- Сегментация сети и Zero Trust.
+- Мониторинг (логи, оповещения).

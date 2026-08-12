@@ -706,7 +706,7 @@ sudo nmap -sS -T2 -f -D RND:5,ME 10.10.10.10
 # UDP-скан самых частых портов
 sudo nmap -sU -F 10.10.10.10
 
-## Основы безопасности веб-приложений (Web Application Security Fundamentals)
+## Модуль 5. Основы безопасности веб-приложений (Web Application Security Fundamentals)
 ### Ручная разведка сайта (Walking An Application)
 
 1. Исходный код страницы (View Page Source)

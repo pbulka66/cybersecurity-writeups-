@@ -945,3 +945,26 @@ HTTPS и сертификат
 4. Выдели код и нажми Ctrl+U.
 5. Нажми Forward.
 6. Если в ответе сервер отразил скрипт — XSS работает.
+
+### Burp Suite: Repeater
+Repeater — что это
+Инструмент для ручного изменения и повторной отправки HTTP-запросов. Берём запрос из Proxy, модифицируем, смотрим ответ. Идеален для тестирования SQLi.
+SQL Injection Union — шаги атаки
+1. Перехватываем GET-запрос к `/about/2`.
+2. Добавляем `'` после `2` (получаем `/about/2'`) — сервер возвращает ошибку 500 и показывает SQL-запрос.
+   - Из ошибки узнаём: таблица `people`, 5 колонок: `firstName, lastName, pfpLink, role, bio`.
+3. Меняем ID на 0, чтобы оригинальный запрос ничего не вернул, и добавляем UNION SELECT:
+   `/about/0 UNION ALL SELECT column_name,null,null,null,null FROM information_schema.columns WHERE table_name="people"`
+   - Запрос возвращает первое имя колонки.
+4. Чтобы увидеть все имена колонок, оборачиваем в group_concat:
+   `/about/0 UNION ALL SELECT group_concat(column_name),null,null,null,null FROM information_schema.columns WHERE table_name="people"`
+   - Получаем: `id, firstName, lastName, pfpLink, role, shortRole, bio, notes`.
+5. Выбираем целевую колонку `notes` и извлекаем данные для пользователя с id=1 (ген. директор):
+   `/about/0 UNION ALL SELECT notes,null,null,null,null FROM people WHERE id=1`
+6. Получаем флаг.
+
+Ключевые моменты
+- UNION требует совпадения количества колонок.
+- Чтобы наша строка была первой, используем несуществующий ID (например, 0).
+- information_schema.columns хранит имена колонок всех таблиц.
+- group_concat объединяет несколько строк в одну.

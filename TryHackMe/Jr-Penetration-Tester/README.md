@@ -1319,7 +1319,7 @@ SSRF → Weak Config → SQLi → Privilege Escalation
 - Login: `admin : admin@001admin`.
 - Получен ADMIN Flag.
 
-## Выводы
+Выводы
 - SSRF через фильтр `file://` + ограничение на `/var/www/html` — читаем исходники.
 - Пароли в комментариях `config.php` — частая ошибка.
 - SQLi в поле поиска + `information_schema` — быстрый путь к кредам.

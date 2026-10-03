@@ -1542,3 +1542,96 @@ Verbose
 - Валидация на сервере (не только в HTML).
 - Принцип наименьших привилегий.
 - WAF.
+
+### API Pentesting
+Что такое API
+Структурированный интерфейс для обмена данными между клиентом и сервером. Отвечает JSON'ом. Не имеет видимого UI — злоумышленник взаимодействует напрямую с endpoints.
+REST — структура
+Ресурсы и endpoints
+- `/v1/users` — коллекция
+- `/v1/users/42` — конкретный ресурс
+- `/v1/users/42/orders` — вложенный ресурс
+
+HTTP-методы
+| Метод | Операция | Пример |
+|-------|----------|--------|
+| GET | Чтение | `GET /v1/products/1` |
+| POST | Создание | `POST /v1/auth/login` |
+| PUT | Полная замена | `PUT /v1/users/4` |
+| PATCH | Частичное обновление | `PATCH /v1/users/me` |
+| DELETE | Удаление | `DELETE /v1/users/4` |
+
+Коды состояния
+- 200 — OK
+- 201 — Created
+- 401 — Unauthorized (нет/неверный токен)
+- 403 — Forbidden (токен есть, прав нет → BOLA)
+- 429 — Rate limit
+- 500 — Server error (возможна инъекция)
+
+Аутентификация
+- **API Keys:** `X-API-Key: ...` (статичные, долгоживущие)
+- **Bearer Tokens:** `Authorization: Bearer ...`
+- **JWT:** `header.payload.signature` (Base64, payload читается)
+
+JWT-уязвимости
+- Слабый секретный ключ → подбор через hashcat/jwt_tool
+- `alg: none` → подделка токена без подписи
+- Нет проверки `exp` → токен работает вечно
+
+BOLA (Broken Object Level Authorization)
+- API не проверяет, что запрашивающий владеет объектом.
+- Пример: `GET /v1/users/4/orders` → меняем на `GET /v1/users/1/orders` → чужие данные.
+- Где искать: URL, query, body, headers.
+- Масштабирование: перебор ID циклом.
+
+Broken Authentication
+- Нет rate limiting на логине → брутфорс
+- Слабые JWT-секреты → подделка
+- `alg: none` → обход подписи
+
+Excessive Data Exposure
+- API возвращает всю модель БД (включая `password_hash`, `api_key`).
+- Фронтенд фильтрует, но данные уже у клиента.
+- Проверка: Burp → смотреть ответы API.
+
+Mass Assignment
+- API принимает все поля из JSON, включая `role`, `is_admin`.
+- Payload: `{"email":"new@shop.thm","role":"admin"}`
+- Проверка: добавить поля в PATCH/POST.
+
+Rate Limiting
+- Проверка: серия запросов → искать 429.
+- Заголовки: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+
+Инструменты
+- **Burp Suite** — перехват API-трафика
+- **Postman / Insomnia** — формирование запросов
+- **ffuf** — брутфорс
+- **jwt_tool** — тестирование JWT
+- **OWASP ZAP** — бесплатная альтернатива
+- **crAPI** — уязвимое API для практики
+
+Команды
+GET-запрос
+curl -s http://target.thm/api/v1/users/1
+POST с JSON
+curl -X POST http://target.thm/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"test","password":"test"}'
+С токеном
+curl -H "Authorization: Bearer $TOKEN" \
+  http://target.thm/api/v1/users/me
+Проверка rate limit
+for i in {1..100}; do
+  curl -s -o /dev/null -w "%{http_code}\n" \
+    http://target.thm/api/v1/auth/login \
+    -X POST -H "Content-Type: application/json" \
+    -d '{"username":"test","password":"wrong"}'
+done
+Защита
+Авторизация на уровне объекта (проверка владельца).
+Фильтрация ответов (не отдавать всю БД).
+Whitelist полей для записи.
+Rate limiting глобально.
+Безопасность JWT: сильные ключи, отказ от alg: none, проверка exp.
